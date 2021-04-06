@@ -149,7 +149,7 @@ files:
     if __name__ == '__main__':
         BankingSystem('banking.banking').run_tests()
   learner_created: false
-- name: banking/banking.py
+- name: banking/main.py
   visible: true
   text: |
     # Write your code here
