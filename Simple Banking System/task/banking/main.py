@@ -38,6 +38,13 @@ class Bank:
         rows = self.cur.fetchone()
         return rows
 
+    def check_card(self, card):
+        query = """SELECT count(number) FROM card WHERE number = ?"""
+        data_tuple = (card,)
+        self.cur.execute(query, data_tuple)
+        rows = self.cur.fetchone()
+        return rows[0] == 1
+
     def menu(self):
         while not self.logged_in:
             print('1. Create an account\n2. Log into account\n0. Exit')
@@ -57,14 +64,16 @@ class Bank:
             print('1. Balance\n2. Add income\n3. Do transfer\n4. Close account\n5. Log out\n0. Exit')
             choice = input()
             if choice == '1':
-                balance = self.check_balance(card)
-                print('\nBalance: \n', balance)
+                print('\nBalance: ', self.check_balance(card))
             elif choice == '2':
-                print(card)
+                print('\nEnter income:')
+                income = input()
+                self.add_income(card, income)
             elif choice == '3':
-                print(" Do transfer")
+                self.transfer_check(card)
             elif choice == '4':
-                print("Close account")
+                self.close_account(card)
+                print('The account has been closed!')
             elif choice == '5':
                 self.logged_in = False
                 print('\nYou have successfully logged out!\n')
@@ -107,13 +116,69 @@ class Bank:
         card += check_sum
         return card
 
+    def luhn_checksum(self, card):
+        def digits_of(n):
+            return [int(d) for d in str(n)]
+        digits = digits_of(card)
+        odd_digits = digits[-1::-2]
+        even_digits = digits[-2::-2]
+        checksum = 0
+        checksum += sum(odd_digits)
+        for d in even_digits:
+            checksum += sum(digits_of(d * 2))
+        return checksum % 10
+
+    def is_luhn_valid(self, card):
+        return self.luhn_checksum(card) == 0
+
     def check_balance(self, card):
         query = """SELECT balance FROM card WHERE number = ?"""
         data_tuple = (card,)
         self.cur.execute(query, data_tuple)
         rows = self.cur.fetchone()
-        print(rows)
-        return rows
+        return rows[0]
+
+    def add_income(self, card, income):
+        query = """UPDATE card SET balance = balance + ? WHERE number = ?"""
+        data_tuple = (income, card)
+        self.cur.execute(query, data_tuple)
+        self.conn.commit()
+        print("Income was added!\n")
+
+    def close_account(self, card):
+        query = """DELETE FROM card WHERE number = ?"""
+        data_tuple = (card,)
+        self.cur.execute(query, data_tuple)
+        self.conn.commit()
+
+    def transfer(self, card, payee, amount):
+        query1 = """UPDATE card SET balance = balance - ? WHERE number = ?"""
+        query2 = """UPDATE card SET balance = balance + ? WHERE number = ?"""
+        data_tuple1 = (amount,card)
+        data_tuple2 = (amount,payee)
+        self.cur.execute(query1, data_tuple1)
+        self.conn.commit()
+        self.cur.execute(query2, data_tuple2)
+        self.conn.commit()
+        print("Success!")
+
+    def transfer_check(self, card):
+        print("\nTransfer")
+        print("Enter card number:")
+        payee = input()
+        if card == payee:
+            print("You can't transfer money to the same account!")
+        elif not self.is_luhn_valid(payee):
+            print("Probably you made a mistake in the card number. Please try again!")
+        elif not self.check_card(payee):
+            print("Such a card does not exist.")
+        else:
+            print("Enter how much money you want to transfer:")
+            amount = input()
+            if int(amount) > int(self.check_balance(card)):
+                print("Not enough money!")
+            else:
+                self.transfer(card, payee, amount)
 
 
 if __name__ == '__main__':
